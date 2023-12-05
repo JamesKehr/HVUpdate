@@ -1,0 +1,71 @@
+-- Linux requirements --
+
+1. The hostname must be resolvable from the HV host (i.e. Resolve-DnsName "<hostname>").
+    - This may require mDNS to be manually installed on the VM.
+    - Ubuntu/Debian-based: sudo apt update && sudo apt install libnss-mdns -y
+2. SSH must be configured passwordless with a KeyFile.
+    - https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_keymanagement
+    - Logon to the Linux VM as the user that will be used for updates.
+        - This user must be a sudoer (Linux administrator).
+    - Run this command to generate key files for the user in the home directory:
+
+    cd $HOME
+    ssh-keygen -P "" -t rsa -b 4096 -m pem -f $(hostname)-kp
+
+    - This command will create two files:
+        <hostname>-kp
+        <hostname>-kp.pub
+
+    - Use this command to copy the public key to the authorized_keys file:
+
+        cat "$(hostname)-kp.pub" >> $HOME/.ssh/authorized_keys
+
+    - Copy the contents of <hostname>-kp to the Hyper-V host in a PEM file. You can copy/paste through SSH or use a command like this:
+
+        scp user@server:/home/user/<hostname>-kp <Windows path>/<hostname>-kp.pem
+
+        Example:
+
+        scp user@gateway:/home/user/gateway-kp C:\Users\MyAdminAccount\AppData\Local\HVUpdate\gateway-kp.pem
+
+    - Test SSH using the key file: 
+
+        ssh -i <Windows path>/<hostname>-kp.pem <user>@<server>
+
+        Example:
+
+        ssh -i C:\Users\MyAdminAccount\AppData\Local\HVUpdate\gateway-kp.pem user@gateway
+
+    - You should be be prompted for a password. That needs to change.
+    - Edit the sudoer file:
+
+        sudo nano /etc/sudoers
+
+    - Go to the bottom of the file, past the "includedir /etc/sudoers.d" line, and add a line for your user account (replace username with your username):
+
+        username ALL=(ALL) NOPASSWD: ALL
+
+    - Save and exit: Ctrl+X, y, Enter
+    - Logoff of ssh by running: exit
+    - SSH back in using the PEM file.
+    - Run this command to confirm that passwordless commands are working.
+
+        sudo apt update
+
+    - Backup the -kp files to a safe place.
+
+3. The KeyFile path and connection string must be added to the HVUpdateVault using: Add-HVUpdateCredential -KeyFile "<path to key file (.pem)>" -SSHPath '<user>@[server|IP|FQDN]'
+4. Install PowerShell on the Linux VM.
+
+https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-linux?view=powershell-7.3
+
+5. Follow these steps to configure Linux sshd to use PowerShell remoting.
+
+https://learn.microsoft.com/en-us/powershell/scripting/learn/remoting/ssh-remoting-in-powershell?view=powershell-7.3#install-the-ssh-service-on-an-ubuntu-linux-computer
+
+
+-- Windows requirements --
+
+PSRemoting must be enabled. Server SKUs should have it enabled by default. Client SKUs may need it enabled manually.
+
+Enable-PSRemoting -Force
